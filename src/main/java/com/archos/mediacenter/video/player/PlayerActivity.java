@@ -2832,6 +2832,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         mPlayerController.setVideoTitle(mTitle);
         log.debug("setVideoInfo: mTitle {}, call postVideoInfoAndPrepared", mTitle);
         postVideoInfoAndPrepared();
+		detectAndShowPremiumFormats(mPlayer, mVideoInfo);
     }
 
     /**
@@ -4045,6 +4046,131 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         } else {
             log.debug("applyRemotePositionIfNeeded: Conditions not met. mResume==RESUME_FROM_REMOTE_POS? {}, mRemotePosition>0? {}, mVideoInfo!=null? {}",
                     mResume == RESUME_FROM_REMOTE_POS, mRemotePosition > 0, mVideoInfo != null);
+			// =====================================================
+// Premium Format Detection + Overlay Display
+// Dolby Vision | HDR10 | HDR10+ | IMAX Enhanced
+// Dolby Atmos | Dolby TrueHD | DD+ | DTS:X | DTS-HD MA | DTS
+// =====================================================
+
+private void detectAndShowPremiumFormats(ExoPlayer player, VideoInfo mVideoInfo) {
+    String audioCodec = LibAvos.getCurrentAudioCodec();
+    String videoCodec = LibAvos.getCurrentVideoCodec();
+
+    String audioFormat = "";
+    String videoFormat = "";
+
+    // 🎧 AUDIO DETECTION
+    if (audioCodec != null) {
+        audioCodec = audioCodec.toLowerCase();
+        List<String> audioList = new ArrayList<>();
+
+        boolean hasAtmos = audioCodec.contains("atmos");
+        boolean hasTrueHD = audioCodec.contains("truehd");
+        boolean hasDDPlus = audioCodec.contains("eac3");
+        boolean hasDD = audioCodec.contains("ac3") && !hasDDPlus;
+        boolean hasDTSX = audioCodec.contains("dts:x");
+        boolean hasDTSHD = audioCodec.contains("dts-hd");
+        boolean hasDTS = audioCodec.contains("dts");
+
+        if (hasAtmos) audioList.add("Dolby Atmos");
+        if (hasTrueHD) audioList.add("Dolby TrueHD");
+        if (hasDDPlus) audioList.add("Dolby Digital Plus");
+        if (hasDD) audioList.add("Dolby Digital");
+        if (hasDTSX) audioList.add("DTS:X");
+        if (hasDTSHD) audioList.add("DTS-HD Master Audio");
+        else if (hasDTS && !hasDTSHD) audioList.add("DTS");
+
+        if (audioList.isEmpty()) audioList.add("Unknown Audio");
+        audioFormat = TextUtils.join(" + ", audioList);
+
+        // ⚙️ Apply audio mode to PlayerService if available
+        try {
+            if (hasAtmos) mPlayerService.setAudioOutputMode("Dolby Atmos");
+            else if (hasTrueHD) mPlayerService.setAudioOutputMode("Dolby TrueHD");
+            else if (hasDDPlus) mPlayerService.setAudioOutputMode("Dolby Digital Plus");
+            else if (hasDTSX) mPlayerService.setAudioOutputMode("DTS:X");
+            else if (hasDTSHD) mPlayerService.setAudioOutputMode("DTS-HD MA");
+            else if (hasDTS) mPlayerService.setAudioOutputMode("DTS");
+            else mPlayerService.setAudioOutputMode("Standard");
+        } catch (Exception e) {
+            log.error("Audio mode apply failed", e);
+        }
+    } else {
+        audioFormat = "Unknown Audio";
+    }
+
+    // 🎥 VIDEO DETECTION
+    if (videoCodec != null) {
+        videoCodec = videoCodec.toLowerCase();
+
+        if (videoCodec.contains("dvhe") || videoCodec.contains("dvh1")) {
+            videoFormat = "Dolby Vision";
+            setDisplayMode("Dolby Vision");
+        } else if (videoCodec.contains("hdr10+")) {
+            videoFormat = "HDR10+";
+            setDisplayMode("HDR10+");
+        } else if (videoCodec.contains("hdr10")) {
+            videoFormat = "HDR10";
+            setDisplayMode("HDR10");
+        } else if (videoCodec.contains("imax") || videoCodec.contains("imx")) {
+            videoFormat = "IMAX Enhanced";
+            setDisplayMode("IMAX");
+        } else {
+            videoFormat = "SDR";
+            setDisplayMode("STANDARD");
+        }
+    } else {
+        videoFormat = "Unknown Video";
+    }
+
+    // 💬 SHOW OVERLAY (top-left info)
+    String displayText = videoFormat + "\n" + audioFormat;
+
+    TextView formatInfo = findViewById(R.id.formatInfo);
+    if (formatInfo != null) {
+        formatInfo.setText(displayText);
+        formatInfo.setVisibility(View.VISIBLE);
+        formatInfo.setAlpha(0f);
+        formatInfo.animate().alpha(1f).setDuration(600).start(); // Fade-in effect
+
+        // Auto-hide after 5 sec
+        new Handler().postDelayed(() -> {
+            formatInfo.animate().alpha(0f).setDuration(800)
+                    .withEndAction(() -> formatInfo.setVisibility(View.GONE))
+                    .start();
+        }, 5000);
+    }
+}
+
+// =====================================================
+// Helper: Set Display Mode
+// =====================================================
+private void setDisplayMode(String mode) {
+    try {
+        if (mPlayerService != null) {
+            log.debug("Applying display mode: " + mode);
+            mPlayerService.setDisplayMode(mode);
+        }
+    } catch (Exception e) {
+        log.error("Failed to apply display mode: " + mode, e);
+    }
+		}
         }
     }
+} // <-- end of setDisplayMode()
+
+// =====================================================
+// detectAndShowPremiumFormats() integration call
+// =====================================================
+@Override
+protected void onVideoPrepared() {
+    super.onVideoPrepared();
+
+    // ✅ Detect and display Dolby / HDR / IMAX / DTS info
+    try {
+        detectAndShowPremiumFormats(mPlayer, mVideoInfo);
+    } catch (Exception e) {
+        log.error("Premium format detection failed", e);
+    }
+}
 }
