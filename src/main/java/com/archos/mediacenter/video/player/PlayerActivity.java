@@ -144,6 +144,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         AudioSpeedPickerDialog.OnAudioSpeedChangeListener,
         DialogInterface.OnDismissListener, TrackInfoListener,
         IndexHelper.Listener, PermissionChecker.PermissionListener, MiscUtils.CutoutMetricsSetter {
+	private TextView formatInfo;
 
     private static final Logger log = LoggerFactory.getLogger(PlayerActivity.class);
 
@@ -554,6 +555,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
             getWindow().setBackgroundDrawable(new ColorDrawable(0xFF000000));
         else getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         setContentView(R.layout.player);
+		formatInfo = findViewById(R.id.formatInfo);
         mRootView = findViewById(R.id.root);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
