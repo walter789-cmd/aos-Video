@@ -329,7 +329,6 @@ android {
 }
 
 dependencies {
-    implementation project(':FileCoreLibrary')
     implementation project(':MediaLib')
     implementation 'androidx.lifecycle:lifecycle-process:2.9.4'
     // needed for old Android versions when using java 17
